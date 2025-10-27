@@ -13,6 +13,8 @@ class CardsView extends StatefulWidget {
 
 class _CardsViewState extends State<CardsView> {
   final _scrollController = ScrollController();
+  final _searchController = TextEditingController();
+  bool _isSearching = false;
 
   @override
   void initState() {
@@ -23,40 +25,163 @@ class _CardsViewState extends State<CardsView> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('PokéCard Dex')),
+      appBar: AppBar(
+        title: _isSearching
+            ? TextField(
+                controller: _searchController,
+                autofocus: true,
+                style: const TextStyle(color: Colors.white),
+                decoration: const InputDecoration(
+                  hintText: 'Search cards...',
+                  hintStyle: TextStyle(color: Colors.white70),
+                  border: InputBorder.none,
+                ),
+                onChanged: (query) {
+                  context.read<PokemonCardBloc>().add(CardsSearched(query));
+                },
+              )
+            : const Text('PokéCard Dex'),
+        actions: [
+          IconButton(
+            icon: Icon(_isSearching ? Icons.close : Icons.search),
+            onPressed: () {
+              setState(() {
+                _isSearching = !_isSearching;
+                if (!_isSearching) {
+                  _searchController.clear();
+                  context.read<PokemonCardBloc>().add(const CardsSearched(''));
+                }
+              });
+            },
+          ),
+        ],
+      ),
       backgroundColor: Colors.green,
       body: BlocBuilder<PokemonCardBloc, PokemonCardState>(
         builder: (context, state) {
           switch (state.status) {
             case PokemonCardStatus.failure:
-              return const Center(
-                child: Text(
-                  'Fallo al obtener las cartas',
-                  style: TextStyle(color: Colors.white),
+              return Center(
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    const Icon(
+                      Icons.error_outline,
+                      color: Colors.white,
+                      size: 60,
+                    ),
+                    const SizedBox(height: 16),
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 32),
+                      child: Text(
+                        state.errorMessage ?? 'Error al cargar las cartas',
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 16,
+                        ),
+                        textAlign: TextAlign.center,
+                      ),
+                    ),
+                    const SizedBox(height: 24),
+                    ElevatedButton.icon(
+                      onPressed: () {
+                        context.read<PokemonCardBloc>().add(CardsRefreshed());
+                      },
+                      icon: const Icon(Icons.refresh),
+                      label: const Text('Reintentar'),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.white,
+                        foregroundColor: Colors.green,
+                      ),
+                    ),
+                  ],
                 ),
               );
             case PokemonCardStatus.success:
-              if (state.cards.isEmpty) {
-                return const Center(
-                  child: Text(
-                    'No se encontraron cartas',
-                    style: TextStyle(color: Colors.white),
+              final cardsToShow = state.filteredCards;
+              
+              if (cardsToShow.isEmpty && state.searchQuery.isNotEmpty) {
+                return Center(
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      const Icon(
+                        Icons.search_off,
+                        color: Colors.white,
+                        size: 60,
+                      ),
+                      const SizedBox(height: 16),
+                      Text(
+                        'No results for "${state.searchQuery}"',
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 16,
+                        ),
+                      ),
+                    ],
                   ),
                 );
               }
-              return ListView.builder(
-                controller: _scrollController,
-                itemCount: state.hasReachedMax
-                    ? state.cards.length
-                    : state.cards.length + 1,
-                itemBuilder: (BuildContext context, int index) {
-                  return index >= state.cards.length
-                      ? const BottomLoader()
-                      : CardListItem(card: state.cards[index]);
+              
+              if (cardsToShow.isEmpty) {
+                return const Center(
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(
+                        Icons.inbox_outlined,
+                        color: Colors.white,
+                        size: 60,
+                      ),
+                      SizedBox(height: 16),
+                      Text(
+                        'No se encontraron cartas',
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontSize: 16,
+                        ),
+                      ),
+                    ],
+                  ),
+                );
+              }
+              
+              return RefreshIndicator(
+                onRefresh: () async {
+                  context.read<PokemonCardBloc>().add(CardsRefreshed());
+                  await Future<void>.delayed(const Duration(seconds: 1));
                 },
+                child: ListView.builder(
+                  controller: _scrollController,
+                  itemCount: state.searchQuery.isEmpty && !state.hasReachedMax
+                      ? cardsToShow.length + 1
+                      : cardsToShow.length,
+                  itemBuilder: (BuildContext context, int index) {
+                    return index >= cardsToShow.length
+                        ? const BottomLoader()
+                        : CardListItem(card: cardsToShow[index]);
+                  },
+                ),
               );
             case PokemonCardStatus.initial:
-              return const Center(child: CircularProgressIndicator());
+              return const Center(
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    CircularProgressIndicator(
+                      valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                    ),
+                    SizedBox(height: 16),
+                    Text(
+                      'Cargando cartas...',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 16,
+                      ),
+                    ),
+                  ],
+                ),
+              );
           }
         },
       ),
@@ -68,11 +193,14 @@ class _CardsViewState extends State<CardsView> {
     _scrollController
       ..removeListener(_onScroll)
       ..dispose();
+    _searchController.dispose();
     super.dispose();
   }
 
   void _onScroll() {
-    if (_isBottom) context.read<PokemonCardBloc>().add(CardsFetched());
+    if (_isBottom && _searchController.text.isEmpty) {
+      context.read<PokemonCardBloc>().add(CardsFetched());
+    }
   }
 
   bool get _isBottom {

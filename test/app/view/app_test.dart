@@ -8,8 +8,11 @@ import 'package:pokecard_dex/pokemon_cards/view/cards_page.dart';
 void main() {
   group('App', () {
     testWidgets('renders CardsPage', (tester) async {
-      await tester.pumpWidget(App());
-      expect(find.byType(CardsPage), findsOneWidget);
+      await tester.runAsync(() async {
+        await tester.pumpWidget(App());
+        await tester.pumpAndSettle();
+        expect(find.byType(CardsPage), findsOneWidget);
+      });
     });
   });
 }

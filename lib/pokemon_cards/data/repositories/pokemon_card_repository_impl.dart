@@ -1,4 +1,5 @@
 import 'package:dio/dio.dart';
+import 'package:dio_cache_interceptor/dio_cache_interceptor.dart';
 import 'package:pokecard_dex/pokemon_cards/data/models/pokemon_card_model.dart';
 import 'package:pokecard_dex/pokemon_cards/domain/entities/pokemon_card.dart';
 import 'package:pokecard_dex/pokemon_cards/domain/repositories/pokemon_card_repository.dart';
@@ -16,7 +17,16 @@ class PokemonCardRepositoryImpl implements PokemonCardRepository {
                 receiveTimeout: const Duration(seconds: 30),
                 sendTimeout: const Duration(seconds: 30),
               ),
-            );
+            )..interceptors.add(
+                DioCacheInterceptor(
+                  options: CacheOptions(
+                    store: MemCacheStore(),
+                    policy: CachePolicy.request,
+                    hitCacheOnErrorExcept: [401, 403],
+                    maxStale: const Duration(days: 7),
+                  ),
+                ),
+              );
 
   final Dio _dio;
   final String _baseUrl = 'https://api.pokemontcg.io/v2';

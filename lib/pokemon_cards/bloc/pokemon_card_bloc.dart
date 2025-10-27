@@ -24,6 +24,8 @@ class PokemonCardBloc extends Bloc<PokemonCardEvent, PokemonCardState> {
       _onCardsFetched,
       transformer: throttleDroppable(_throttleDuration),
     );
+    on<CardsSearched>(_onCardsSearched);
+    on<CardsRefreshed>(_onCardsRefreshed);
   }
 
   final PokemonCardRepository _pokemonCardRepository;
@@ -39,10 +41,23 @@ class PokemonCardBloc extends Bloc<PokemonCardEvent, PokemonCardState> {
       if (state.status == PokemonCardStatus.initial) {
         final cards = await _pokemonCardRepository.getCards(page: _currentPage);
         _currentPage++;
+        
+        if (cards.isEmpty) {
+          return emit(
+            state.copyWith(
+              status: PokemonCardStatus.success,
+              cards: [],
+              filteredCards: [],
+              hasReachedMax: true,
+            ),
+          );
+        }
+        
         return emit(
           state.copyWith(
             status: PokemonCardStatus.success,
             cards: cards,
+            filteredCards: cards,
             hasReachedMax: false,
           ),
         );
@@ -54,16 +69,52 @@ class PokemonCardBloc extends Bloc<PokemonCardEvent, PokemonCardState> {
       if (cards.isEmpty) {
         emit(state.copyWith(hasReachedMax: true));
       } else {
+        final allCards = List.of(state.cards)..addAll(cards);
+        final filtered = _filterCards(allCards, state.searchQuery);
         emit(
           state.copyWith(
             status: PokemonCardStatus.success,
-            cards: List.of(state.cards)..addAll(cards),
+            cards: allCards,
+            filteredCards: filtered,
             hasReachedMax: false,
           ),
         );
       }
-    } catch (_) {
-      emit(state.copyWith(status: PokemonCardStatus.failure));
+    } catch (e) {
+      emit(state.copyWith(
+        status: PokemonCardStatus.failure,
+        errorMessage: e.toString().replaceFirst('Exception: ', ''),
+      ));
     }
+  }
+
+  void _onCardsSearched(
+    CardsSearched event,
+    Emitter<PokemonCardState> emit,
+  ) {
+    final filtered = _filterCards(state.cards, event.query);
+    emit(state.copyWith(
+      filteredCards: filtered,
+      searchQuery: event.query,
+    ));
+  }
+
+  Future<void> _onCardsRefreshed(
+    CardsRefreshed event,
+    Emitter<PokemonCardState> emit,
+  ) async {
+    _currentPage = 1;
+    emit(const PokemonCardState());
+    add(CardsFetched());
+  }
+
+  List<PokemonCard> _filterCards(List<PokemonCard> cards, String query) {
+    if (query.isEmpty) return cards;
+    final lowercaseQuery = query.toLowerCase();
+    return cards.where((card) {
+      return card.name.toLowerCase().contains(lowercaseQuery) ||
+          (card.supertype?.toLowerCase().contains(lowercaseQuery) ?? false) ||
+          (card.hp?.toLowerCase().contains(lowercaseQuery) ?? false);
+    }).toList();
   }
 }
