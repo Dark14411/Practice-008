@@ -1,15 +1,22 @@
 import 'package:dio/dio.dart';
-import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:pokecard_dex/pokemon_cards/data/models/pokemon_card_model.dart';
 import 'package:pokecard_dex/pokemon_cards/domain/entities/pokemon_card.dart';
 import 'package:pokecard_dex/pokemon_cards/domain/repositories/pokemon_card_repository.dart';
 
+// Replace 'YOUR_API_KEY_HERE' with your actual API key from https://pokemontcg.io/
+const String apiKey = 'YOUR_API_KEY_HERE';
+
 class PokemonCardRepositoryImpl implements PokemonCardRepository {
-  PokemonCardRepositoryImpl({Dio? dio}) : _dio = dio ?? Dio(BaseOptions(
-        headers: {
-          'X-Api-Key': dotenv.env['POKEMON_API_KEY'] ?? 'REPLACE_ME',
-        },
-      ));
+  PokemonCardRepositoryImpl({Dio? dio})
+      : _dio = dio ??
+            Dio(
+              BaseOptions(
+                headers: {'X-Api-Key': apiKey},
+                connectTimeout: const Duration(seconds: 30),
+                receiveTimeout: const Duration(seconds: 30),
+                sendTimeout: const Duration(seconds: 30),
+              ),
+            );
 
   final Dio _dio;
   final String _baseUrl = 'https://api.pokemontcg.io/v2';
@@ -20,7 +27,7 @@ class PokemonCardRepositoryImpl implements PokemonCardRepository {
     int pageSize = 20,
   }) async {
     try {
-      final response = await _dio.get(
+      final response = await _dio.get<Map<String, dynamic>>(
         '$_baseUrl/cards',
         queryParameters: {
           'page': page,
@@ -30,17 +37,31 @@ class PokemonCardRepositoryImpl implements PokemonCardRepository {
       );
 
       if (response.statusCode == 200 && response.data != null) {
-        final results = response.data['data'] as List;
+        final data = response.data!;
+        final results = data['data'] as List<dynamic>?;
+        
+        if (results == null || results.isEmpty) {
+          return [];
+        }
+        
         return results
             .map((json) => PokemonCardModel.fromJson(
                   json as Map<String, dynamic>,
                 ).toEntity())
             .toList();
       } else {
-        throw Exception('Failed to load Pokémon cards');
+        throw Exception('Failed to load Pokémon cards: ${response.statusCode}');
       }
     } on DioException catch (e) {
+      if (e.type == DioExceptionType.connectionTimeout ||
+          e.type == DioExceptionType.receiveTimeout) {
+        throw Exception('Connection timeout. Please check your internet connection.');
+      } else if (e.type == DioExceptionType.connectionError) {
+        throw Exception('No internet connection. Please check your network.');
+      }
       throw Exception('Network error: ${e.message}');
+    } catch (e) {
+      throw Exception('Error loading cards: $e');
     }
   }
 }

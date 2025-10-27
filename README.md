@@ -35,6 +35,20 @@ _\*Pokecard Dex works on iOS, Android, Web, and Windows._
 
 ---
 
+## API Key Setup 🔑
+
+To use this app, you need to obtain an API key from [Pokémon TCG API](https://pokemontcg.io/).
+
+1. Sign up at https://pokemontcg.io/ and get your API key.
+2. Open `lib/pokemon_cards/data/repositories/pokemon_card_repository_impl.dart`.
+3. Replace `'YOUR_API_KEY_HERE'` with your actual API key.
+
+```dart
+const String apiKey = 'your_actual_api_key_here';
+```
+
+---
+
 ## Running Tests 🧪
 
 To run all unit and widget tests use the following command:
