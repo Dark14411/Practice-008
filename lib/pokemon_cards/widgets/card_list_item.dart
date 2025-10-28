@@ -2,6 +2,7 @@ import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:pokecard_dex/pokemon_cards/data/services/favorites_service.dart';
 import 'package:pokecard_dex/pokemon_cards/domain/entities/pokemon_card.dart';
+import 'package:pokecard_dex/pokemon_cards/view/card_detail_page.dart';
 
 class CardListItem extends StatefulWidget {
   const CardListItem({required this.card, super.key});
@@ -58,18 +59,21 @@ class _CardListItemState extends State<CardListItem> {
     return Card(
       margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
       child: ListTile(
-        leading: CachedNetworkImage(
-          imageUrl: widget.card.imageUrl,
-          width: 50,
-          fit: BoxFit.contain,
-          placeholder: (context, url) => const SizedBox(
+        leading: Hero(
+          tag: 'card-${widget.card.id}',
+          child: CachedNetworkImage(
+            imageUrl: widget.card.imageUrl,
             width: 50,
-            height: 50,
-            child: Center(
-              child: CircularProgressIndicator(strokeWidth: 2),
+            fit: BoxFit.contain,
+            placeholder: (context, url) => const SizedBox(
+              width: 50,
+              height: 50,
+              child: Center(
+                child: CircularProgressIndicator(strokeWidth: 2),
+              ),
             ),
+            errorWidget: (context, url, error) => const Icon(Icons.error),
           ),
-          errorWidget: (context, url, error) => const Icon(Icons.error),
         ),
         title: Text(widget.card.name),
         subtitle: Text('HP: ${widget.card.hp ?? 'N/A'} - ${widget.card.supertype ?? ''}'),
@@ -87,6 +91,13 @@ class _CardListItemState extends State<CardListItem> {
                 onPressed: _toggleFavorite,
               ),
         dense: true,
+        onTap: () {
+          Navigator.of(context).push(
+            MaterialPageRoute<void>(
+              builder: (context) => CardDetailPage(card: widget.card),
+            ),
+          );
+        },
       ),
     );
   }
